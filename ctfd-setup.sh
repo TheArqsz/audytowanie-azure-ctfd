@@ -3,7 +3,8 @@
 #
 # Copyright 2021 TheArqsz
 
-sudo apt-get update -q && sudo apt-get install -y -qq gcc python3-dev nginx
+sudo useradd -ms /bin/bash ctfd
+sudo apt-get update -q && sudo apt-get install -y -qq gcc python3-venv python3-dev nginx docker.io
 
 # Clone CTFd
 git clone https://github.com/CTFd/CTFd 2>/dev/null || ( echo Already cloned CTFd && cd CTFd && git pull 2>/dev/null )
@@ -24,10 +25,8 @@ for d in CTFd/plugins/*; do
 done;
 
 # Make directories for uploads and logs and change ownership of them to ctfd user
-sudo mkdir /var/log/CTFd /var/uploads
+sudo mkdir /var/log/CTFd /var/uploads 2>/dev/null
 sudo chown -R ctfd:ctfd /var/log/CTFd /var/uploads ${PWD}
-
-set -euo pipefail
 
 # Env variables
 WORKERS=${WORKERS:-1}
@@ -38,6 +37,13 @@ WORKER_TEMP_DIR=${WORKER_TEMP_DIR:-/dev/shm}
 SECRET_KEY=${SECRET_KEY:-}
 HOST_IP=${HOST_IP:-127.0.0.1}
 HOST_PORT=${HOST_PORT:-8000}
+DATABASE_URL=${DATABASE_URL:-"mysql+pymysql://root:dbctfdpass@localhost/ctfd"}
+
+# Database
+sudo mkdir /tmp/ctfd-mariadb-data 2>/dev/null
+sudo docker rm -f ctfd-mariadb 
+sudo docker run -p 127.0.0.1:3306:3306 -v /tmp/ctfd-mariadb-data:/var/lib/mysql --name ctfd-mariadb -e MARIADB_ROOT_PASSWORD=dbctfdpass -e MARIADB_DATABASE=ctfd --rm -d mariadb
+sleep 5
 
 # Check that a .ctfd_secret_key file or SECRET_KEY envvar is set
 if [ ! -f .ctfd_secret_key ] && [ -z "$SECRET_KEY" ]; then
@@ -49,7 +55,73 @@ if [ ! -f .ctfd_secret_key ] && [ -z "$SECRET_KEY" ]; then
     fi
 fi
 
+# Install nginx proxy
+sudo mkdir -p /etc/nginx/ssl
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/nginx.key -out /etc/nginx/ssl/nginx.crt -subj "/C=PL/ST=Mazowieckie/L=Warsaw/emailAddress=test@test.com"
+sudo sed -i "s/include \/etc\/nginx\/sites-enabled\/\*\;/# include \/etc\/nginx\/sites-enabled\/\*\;/" /etc/nginx/nginx.conf
+sudo tee /etc/nginx/conf.d/ctfd.conf > /dev/null << EOT
+	upstream ctfd_app {
+		# fail_timeout=0 always retry ctfd even if it failed
+		server $HOST_IP:$HOST_PORT fail_timeout=0;
+	}
+	# server {
+	# 	# if no Host match, close the connection to prevent host spoofing
+	# 	listen 80 default_server;
+	# 	return 444;
+	# }
+	# server {
+	# 	listen 8443 ssl deferred;
+	# 	# You must either change this line or set the hostname of the server (e.g. through docker-compose.yml) for correct serving and ssl to be accepted
+	# 	server_name \$hostname;
+	# 	# SSL settings: Ensure your certs have the correct host names
+	# 	ssl_certificate /etc/ssl/ctfd.crt;
+	# 	ssl_certificate_key /etc/ssl/ctfd.key;
+	# 	ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+	# 	ssl_ciphers HIGH:!aNULL:!MD5;
+	# 	# Set connections to timout in 5 seconds
+	# 	keepalive_timeout 5;
+	# 	location / {
+	# 	proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+	# 	proxy_set_header X-Forwarded-Proto https;
+	# 	proxy_set_header Host \$http_host;
+	# 	proxy_redirect off;
+	# 	proxy_buffering off;
+	# 	proxy_pass http://ctfd_app;
+	# 	}
+	# }
+	# Redirect clients from HTTP to HTTPS
+	# server {
+	# 	listen 80;
+	# 	server_name \$hostname;
+	# 	return 301 https://\$server_name\$request_uri;
+	# }
+	server {
+		listen 443 ssl default_server;
+    		listen [::]:443 ssl default_server;
+		server_name _;
+       		ssl_certificate /etc/nginx/ssl/nginx.crt;
+    		ssl_certificate_key /etc/nginx/ssl/nginx.key;
+
+		return 301 http://\$host\$request_uri;
+        }
+	server {
+		listen 80 default_server;
+		keepalive_timeout 5;
+		location / {
+			proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+			proxy_set_header X-Forwarded-Proto https;
+			proxy_set_header Host \$http_host;
+			proxy_redirect off;
+			proxy_buffering off;
+			proxy_pass http://ctfd_app;
+		}
+	}	
+EOT
+
+sudo nginx -t && sudo service nginx restart
+
 # If first argument is set to "service" - install ctfd as a systemd service
+curr_path=$(pwd)
 if [ "${1-manual}" = "service" ]; then
 	sudo tee /etc/systemd/system/gunicorn.service> /dev/null << EOT
 	[Unit]
@@ -66,11 +138,12 @@ if [ "${1-manual}" = "service" ]; then
 	# DynamicUser=yes
 	# see http://0pointer.net/blog/dynamic-users-with-systemd.html
 	RuntimeDirectory=gunicorn
-	WorkingDirectory=/home/ctfdadmin/CTFd
-	Environment="PATH=/home/ctfdadmin/CTFd/.venv-ctfd/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
-	ExecStartPre = /home/ctfdadmin/CTFd/.venv-ctfd/bin/python ping.py
-	ExecStartPre = /home/ctfdadmin/CTFd/.venv-ctfd/bin/python manage.py db upgrade
-	ExecStart=/home/ctfdadmin/CTFd/.venv-ctfd/bin/gunicorn 'CTFd:create_app()' \
+	WorkingDirectory=${curr_path}
+	Environment="PATH=${curr_path}/.venv-ctfd/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
+	Environment=DATABASE_URL=${DATABASE_URL}
+	ExecStartPre = ${curr_path}/.venv-ctfd/bin/python ping.py
+	ExecStartPre = ${curr_path}/.venv-ctfd/bin/python manage.py db upgrade
+	ExecStart=${curr_path}/.venv-ctfd/bin/gunicorn 'CTFd:create_app()' \
 		--bind '$HOST_IP:$HOST_PORT' \
 		--workers $WORKERS \
 			--worker-tmp-dir "$WORKER_TEMP_DIR" \
@@ -90,12 +163,13 @@ EOT
 
 # If first argument is anything else than "service" - install it and run in current CLI
 else
-	curr_path=$(pwd)
 	sudo -i -u ctfd bash << EOF
 	cd ${curr_path}
 	pwd
 
 	source .venv-ctfd/bin/activate
+
+	export DATABASE_URL=${DATABASE_URL}
 
 	# Ensures that the database is available
 	python ping.py
@@ -114,57 +188,3 @@ else
     	--error-logfile "$ERROR_LOG"
 EOF
 fi
-
-# Install nginx proxy
-sudo sed -i "s/include \/etc\/nginx\/sites-enabled\/\*\;/# include \/etc\/nginx\/sites-enabled\/\*\;/" /etc/nginx/nginx.conf
-sudo tee /etc/nginx/conf.d/ctfd.conf > /dev/null << EOT
-	upstream ctfd_app {
-		# fail_timeout=0 always retry ctfd even if it failed
-		server $HOST_IP:$HOST_PORT fail_timeout=0;
-	}
-	# server {
-	# 	# if no Host match, close the connection to prevent host spoofing
-	# 	listen 80 default_server;
-	# 	return 444;
-	# }
-	# server {
-	# 	listen 8443 ssl deferred;
-	# 	# You must either change this line or set the hostname of the server (e.g. through docker-compose.yml) for correct serving and ssl to be accepted
-	# 	server_name $hostname;
-	# 	# SSL settings: Ensure your certs have the correct host names
-	# 	ssl_certificate /etc/ssl/ctfd.crt;
-	# 	ssl_certificate_key /etc/ssl/ctfd.key;
-	# 	ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
-	# 	ssl_ciphers HIGH:!aNULL:!MD5;
-	# 	# Set connections to timout in 5 seconds
-	# 	keepalive_timeout 5;
-	# 	location / {
-	# 	proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-	# 	proxy_set_header X-Forwarded-Proto https;
-	# 	proxy_set_header Host $http_host;
-	# 	proxy_redirect off;
-	# 	proxy_buffering off;
-	# 	proxy_pass http://ctfd_app;
-	# 	}
-	# }
-	# Redirect clients from HTTP to HTTPS
-	# server {
-	# 	listen 80;
-	# 	server_name $hostname;
-	# 	return 301 https://$server_name$request_uri;
-	# }
-	server {
-		listen 80 default_server;
-		keepalive_timeout 5;
-		location / {
-			proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-			proxy_set_header X-Forwarded-Proto https;
-			proxy_set_header Host $http_host;
-			proxy_redirect off;
-			proxy_buffering off;
-			proxy_pass http://ctfd_app;
-		}
-	}	
-EOT
-
-sudo nginx -t && sudo service nginx restart
