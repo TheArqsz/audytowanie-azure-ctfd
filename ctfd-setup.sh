@@ -3,6 +3,11 @@
 #
 # Copyright 2021 TheArqsz
 
+if [[ $# -ne 2 ]]; then
+    echo "Illegal number of parameters: mode and database format needed" >&2
+    exit 2
+fi
+
 sudo useradd -ms /bin/bash ctfd
 sudo apt-get update -q && sudo apt-get install -y -qq gcc python3-venv python3-dev nginx docker.io
 
@@ -40,10 +45,16 @@ HOST_PORT=${HOST_PORT:-8000}
 DATABASE_URL=${DATABASE_URL:-"mysql+pymysql://root:dbctfdpass@localhost/ctfd"}
 
 # Database
-sudo mkdir /tmp/ctfd-mariadb-data 2>/dev/null
-sudo docker rm -f ctfd-mariadb 
-sudo docker run -p 127.0.0.1:3306:3306 -v /tmp/ctfd-mariadb-data:/var/lib/mysql --name ctfd-mariadb -e MARIADB_ROOT_PASSWORD=dbctfdpass -e MARIADB_DATABASE=ctfd --rm -d mariadb
-sleep 5
+if [ "${2-nocreate}" = "create" ]; then
+	sudo mkdir /tmp/ctfd-mariadb-data 2>/dev/null
+	sudo docker rm -f ctfd-mariadb 
+	sudo docker run -p 127.0.0.1:3306:3306 -v /tmp/ctfd-mariadb-data:/var/lib/mysql --name ctfd-mariadb -e MARIADB_ROOT_PASSWORD=dbctfdpass -e MARIADB_DATABASE=ctfd --rm -d mariadb
+	sleep 5
+elif [ "${2-nocreate}" = "nocreate" ]; then
+	echo "Not creating database - use existing one (set it via DATABASE_URL variable)"
+else
+	echo "Wrong argument passed (nocreate or create accepted)"
+fi
 
 # Check that a .ctfd_secret_key file or SECRET_KEY envvar is set
 if [ ! -f .ctfd_secret_key ] && [ -z "$SECRET_KEY" ]; then
@@ -123,6 +134,11 @@ sudo nginx -t && sudo service nginx restart
 # If first argument is set to "service" - install ctfd as a systemd service
 curr_path=$(pwd)
 if [ "${1-manual}" = "service" ]; then
+	sudo mkdir /etc/sysconfig
+	sudo tee /etc/sysconfig/gunicorn > /dev/null << EOT
+PATH=${curr_path}/.venv-ctfd/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
+DATABASE_URL=${DATABASE_URL}
+EOT
 	sudo tee /etc/systemd/system/gunicorn.service> /dev/null << EOT
 	[Unit]
 	Description=CTFd
@@ -139,8 +155,7 @@ if [ "${1-manual}" = "service" ]; then
 	# see http://0pointer.net/blog/dynamic-users-with-systemd.html
 	RuntimeDirectory=gunicorn
 	WorkingDirectory=${curr_path}
-	Environment="PATH=${curr_path}/.venv-ctfd/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
-	Environment=DATABASE_URL=${DATABASE_URL}
+	EnvironmentFile=/etc/sysconfig/gunicorn
 	ExecStartPre = ${curr_path}/.venv-ctfd/bin/python ping.py
 	ExecStartPre = ${curr_path}/.venv-ctfd/bin/python manage.py db upgrade
 	ExecStart=${curr_path}/.venv-ctfd/bin/gunicorn 'CTFd:create_app()' \
@@ -162,7 +177,7 @@ EOT
 	sudo systemctl start gunicorn
 
 # If first argument is anything else than "service" - install it and run in current CLI
-else
+elif [ "${1-manual}" = "manual" ]; then
 	sudo -i -u ctfd bash << EOF
 	cd ${curr_path}
 	pwd
@@ -187,4 +202,6 @@ else
     	--access-logfile "$ACCESS_LOG" \
     	--error-logfile "$ERROR_LOG"
 EOF
+else
+	echo "Wrong argument passed (manual or service accepted)"
 fi
