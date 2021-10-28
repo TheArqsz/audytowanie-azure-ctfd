@@ -265,27 +265,6 @@ if [ "${install_nginx}" = "1" ]; then
 			}
 
 		}
-		# server {
-		# 	listen 443 ssl default_server;
-		# 		listen [::]:443 ssl default_server;
-		# 	server_name _;
-		# 		ssl_certificate /etc/nginx/ssl/nginx.crt;
-		# 		ssl_certificate_key /etc/nginx/ssl/nginx.key;
-
-		# 	return 301 http://\$host\$request_uri;
-		# 	}
-		# server {
-		# 	listen 80 default_server;
-		# 	keepalive_timeout 5;
-		# 	location / {
-		# 		proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-		# 		proxy_set_header X-Forwarded-Proto https;
-		# 		proxy_set_header Host \$http_host;
-		# 		proxy_redirect off;
-		# 		proxy_buffering off;
-		# 		proxy_pass http://ctfd_app;
-		# 	}
-		# }	
 EOT
 
 	sudo nginx -t 2>>$error_log_file && sudo service nginx restart 2>>$error_log_file && echo "Nginx installed" 
