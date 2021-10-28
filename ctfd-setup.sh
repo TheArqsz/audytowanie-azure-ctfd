@@ -230,8 +230,8 @@ if [ "${install_nginx}" = "1" ]; then
 			listen         80;
 			server_name    audytowanie.arqsz.net;
 			server_tokens  off;
-			rewrite ^(.*)  https://$server_name$1 permanent;
-			return 301     https://$server_name$request_uri;
+			rewrite ^(.*)  https://\$server_name\$1 permanent;
+			return 301     https://\$server_name\$request_uri;
 		}
 
 		server {
