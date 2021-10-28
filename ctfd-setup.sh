@@ -17,7 +17,7 @@ Usage: $0 -m service --nginx --mock-database...
 Quickly setup CTFd instance locally (as a service or as a process in the CLI)
 
 Mandatory arguments:
-   -m, --mode        				Mode of gunicorn (service or manual)
+   -m, --mode        				Mode of gunicorn (service or cli)
 
 Optional arguments:
    -h, --help        				Displays this help
@@ -155,7 +155,7 @@ while [ -n "$1" ]; do
 done
 
 if [ -z "$mode" ]; then
-   echo "Script mode must be set - manual or service"
+   echo "Script mode must be set - manual or cli"
    exit 1
 fi
 
@@ -339,7 +339,7 @@ EOT
 	fi
 
 # If first argument is anything else than "service" - install it and run in current CLI
-elif [ "$mode" = "manual" ]; then
+elif [ "$mode" = "cli" ]; then
 	sudo -i -u $SERVICE_USER bash << EOF
 	cd ${curr_path}
 	pwd
