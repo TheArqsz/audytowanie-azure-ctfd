@@ -250,10 +250,10 @@ if [ "${install_nginx}" = "1" ]; then
 			http2_max_header_size 128k;
 
 			location /{
-				proxy_set_header      Host $host;
-				proxy_set_header      X-Real-IP $remote_addr;
-				proxy_set_header      X-Forwaded-For $proxy_add_x_forwarded_for;
-				proxy_set_header      X-Forwarder-Proto $scheme;
+				proxy_set_header      Host \$host;
+				proxy_set_header      X-Real-IP \$remote_addr;
+				proxy_set_header      X-Forwaded-For \$proxy_add_x_forwarded_for;
+				proxy_set_header      X-Forwarder-Proto \$scheme;
 
 				# Rate limiting
 				limit_req zone=mylimit burst=20 nodelay;
