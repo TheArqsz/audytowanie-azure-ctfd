@@ -226,22 +226,29 @@ if [ "${install_nginx}" = "1" ]; then
 			# fail_timeout=0 always retry ctfd even if it failed
 			server $HOST_IP:$HOST_PORT fail_timeout=0;
 		}
-		# server {
-		# 	# if no Host match, close the connection to prevent host spoofing
-		# 	listen 80 default_server;
-		# 	return 444;
-		# }
 		server {
-			listen 443 ssl deferred;
-			# You must either change this line or set the hostname of the server (e.g. through docker-compose.yml) for correct serving and ssl to be accepted
-			server_name audytowanie.arqsz.net;
-			# SSL settings: Ensure your certs have the correct host names
-			ssl_certificate /etc/letsencrypt/live/audytowanie.arqsz.net/fullchain.pem;
-			ssl_certificate_key /etc/letsencrypt/live/audytowanie.arqsz.net/privkey.pem;
-			ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
-			ssl_ciphers HIGH:!aNULL:!MD5;
-			# Set connections to timout in 5 seconds
-			keepalive_timeout 5;
+			listen         80;
+			server_name    audytowanie.arqsz.net;
+			server_tokens  off;
+			rewrite ^(.*)  https://$server_name$1 permanent;
+			return 301     https://$server_name$request_uri;
+		}
+
+		server {
+			listen       443 ssl http2 ;
+			listen       [::]:443 ssl http2 ;
+			server_name  audytowanie.arqsz.net;
+			server_tokens off;
+			ssl_certificate "/etc/letsencrypt/live/audytowanie.arqsz.net/fullchain.pem";
+			ssl_certificate_key "/etc/letsencrypt/live/audytowanie.arqsz.net/privkey.pem";
+			#ssl_session_cache shared:SSL:1m;
+			#ssl_session_timeout  10m;
+			#ssl_ciphers HIGH:!aNULL:!MD5;
+			ssl_ciphers "ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384";
+			ssl_prefer_server_ciphers on;
+			http2_max_field_size 128k;
+			http2_max_header_size 128k;
+
 			location / {
 				proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
 				proxy_set_header X-Forwarded-Proto https;
@@ -250,12 +257,7 @@ if [ "${install_nginx}" = "1" ]; then
 				proxy_buffering off;
 				proxy_pass http://ctfd_app;
 			}
-		}
-		# Redirect clients from HTTP to HTTPS
-		server {
-			listen 80;
-			server_name audytowanie.arqsz.net;
-			return 301 https://\$server_name\$request_uri;
+
 		}
 		# server {
 		# 	listen 443 ssl default_server;
@@ -347,6 +349,7 @@ elif [ "$mode" = "cli" ]; then
 	source .venv-ctfd/bin/activate
 
 	export DATABASE_URL=${DATABASE_URL}
+	export DATABASE_URL=${DATABASE_URL:-"mysql+pymysql://$DATABASE_USER:$DATABASE_PASSWORD@$DATABASE_IP/$DATABASE_NAME"}
 
 	# Ensures that the database is available
 	python ping.py
