@@ -81,7 +81,6 @@ DATABASE_USER=${DATABASE_URL:-root}
 DATABASE_PASSWORD=${DATABASE_URL:-dbctfdpass}
 DATABASE_IP=${DATABASE_IP:-localhost}
 DATABASE_NAME=${DATABASE_NAME:-ctfd}
-DATABASE_URL=${DATABASE_URL:-"mysql+pymysql://$DATABASE_USER:$DATABASE_PASSWORD@$DATABASE_IP/$DATABASE_NAME"}
 SERVICE_USER=${SERVICE_USER:-`whoami`}
 mock_database=0
 dependencies=1
@@ -160,6 +159,8 @@ if [ -z "$mode" ]; then
    exit 1
 fi
 
+DATABASE_URL=${DATABASE_URL:-"mysql+pymysql://$DATABASE_USER:$DATABASE_PASSWORD@$DATABASE_IP/$DATABASE_NAME"}
+
 sudo useradd -ms /bin/bash $SERVICE_USER 2>>$error_log_file
 
 if [ $dependencies = "1" ]; then
@@ -230,43 +231,16 @@ if [ "${install_nginx}" = "1" ]; then
 		# 	listen 80 default_server;
 		# 	return 444;
 		# }
-		# server {
-		# 	listen 8443 ssl deferred;
-		# 	# You must either change this line or set the hostname of the server (e.g. through docker-compose.yml) for correct serving and ssl to be accepted
-		# 	server_name \$hostname;
-		# 	# SSL settings: Ensure your certs have the correct host names
-		# 	ssl_certificate /etc/ssl/ctfd.crt;
-		# 	ssl_certificate_key /etc/ssl/ctfd.key;
-		# 	ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
-		# 	ssl_ciphers HIGH:!aNULL:!MD5;
-		# 	# Set connections to timout in 5 seconds
-		# 	keepalive_timeout 5;
-		# 	location / {
-		# 	proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-		# 	proxy_set_header X-Forwarded-Proto https;
-		# 	proxy_set_header Host \$http_host;
-		# 	proxy_redirect off;
-		# 	proxy_buffering off;
-		# 	proxy_pass http://ctfd_app;
-		# 	}
-		# }
-		# Redirect clients from HTTP to HTTPS
-		# server {
-		# 	listen 80;
-		# 	server_name \$hostname;
-		# 	return 301 https://\$server_name\$request_uri;
-		# }
 		server {
-			listen 443 ssl default_server;
-				listen [::]:443 ssl default_server;
-			server_name _;
-				ssl_certificate /etc/nginx/ssl/nginx.crt;
-				ssl_certificate_key /etc/nginx/ssl/nginx.key;
-
-			return 301 http://\$host\$request_uri;
-			}
-		server {
-			listen 80 default_server;
+			listen 443 ssl deferred;
+			# You must either change this line or set the hostname of the server (e.g. through docker-compose.yml) for correct serving and ssl to be accepted
+			server_name audytowanie.arqsz.net;
+			# SSL settings: Ensure your certs have the correct host names
+			ssl_certificate /etc/letsencrypt/live/audytowanie.arqsz.net/fullchain.pem;
+			ssl_certificate_key /etc/letsencrypt/live/audytowanie.arqsz.net/privkey.pem;
+			ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+			ssl_ciphers HIGH:!aNULL:!MD5;
+			# Set connections to timout in 5 seconds
 			keepalive_timeout 5;
 			location / {
 				proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -276,7 +250,34 @@ if [ "${install_nginx}" = "1" ]; then
 				proxy_buffering off;
 				proxy_pass http://ctfd_app;
 			}
-		}	
+		}
+		Redirect clients from HTTP to HTTPS
+		server {
+			listen 80;
+			server_name \$hostname;
+			return 301 https://\$server_name\$request_uri;
+		}
+		# server {
+		# 	listen 443 ssl default_server;
+		# 		listen [::]:443 ssl default_server;
+		# 	server_name _;
+		# 		ssl_certificate /etc/nginx/ssl/nginx.crt;
+		# 		ssl_certificate_key /etc/nginx/ssl/nginx.key;
+
+		# 	return 301 http://\$host\$request_uri;
+		# 	}
+		# server {
+		# 	listen 80 default_server;
+		# 	keepalive_timeout 5;
+		# 	location / {
+		# 		proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+		# 		proxy_set_header X-Forwarded-Proto https;
+		# 		proxy_set_header Host \$http_host;
+		# 		proxy_redirect off;
+		# 		proxy_buffering off;
+		# 		proxy_pass http://ctfd_app;
+		# 	}
+		# }	
 EOT
 
 	sudo nginx -t 2>>$error_log_file && sudo service nginx restart 2>>$error_log_file && echo "Nginx installed" 
