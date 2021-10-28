@@ -255,9 +255,6 @@ if [ "${install_nginx}" = "1" ]; then
 				proxy_set_header      X-Forwaded-For \$proxy_add_x_forwarded_for;
 				proxy_set_header      X-Forwarder-Proto \$scheme;
 
-				# Rate limiting
-				limit_req zone=mylimit burst=20 nodelay;
-
 				proxy_pass    http://127.0.0.1:8000/;
 				proxy_read_timeout    3600;
 				proxy_buffering               off; # for a single server setup (SSL termination of Varnish), where no caching is done in nginx itself
