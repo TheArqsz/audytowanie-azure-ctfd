@@ -251,10 +251,10 @@ if [ "${install_nginx}" = "1" ]; then
 				proxy_pass http://ctfd_app;
 			}
 		}
-		Redirect clients from HTTP to HTTPS
+		# Redirect clients from HTTP to HTTPS
 		server {
 			listen 80;
-			server_name \$hostname;
+			server_name audytowanie.arqsz.net;
 			return 301 https://\$server_name\$request_uri;
 		}
 		# server {
