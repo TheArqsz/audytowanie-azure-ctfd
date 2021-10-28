@@ -159,7 +159,7 @@ if [ -z "$mode" ]; then
    exit 1
 fi
 
-DATABASE_URL=${DATABASE_URL:-"mysql+pymysql://$DATABASE_USER:$DATABASE_PASSWORD@$DATABASE_IP/$DATABASE_NAME"}
+DATABASE_URL="${DATABASE_URL:-"mysql+pymysql://$DATABASE_USER:$DATABASE_PASSWORD@$DATABASE_IP/$DATABASE_NAME"}"
 
 sudo useradd -ms /bin/bash $SERVICE_USER 2>>$error_log_file
 
@@ -255,13 +255,13 @@ if [ "${install_nginx}" = "1" ]; then
 				proxy_set_header      X-Forwaded-For \$proxy_add_x_forwarded_for;
 				proxy_set_header      X-Forwarder-Proto \$scheme;
 
-				proxy_pass    http://127.0.0.1:8000/;
+				proxy_pass    http://ctfd_app;
 				proxy_read_timeout    3600;
 				proxy_buffering               off; # for a single server setup (SSL termination of Varnish), where no caching is done in nginx itself
 				proxy_buffer_size     24k; # should be enough for most PHP websites, or adjust as above
 				proxy_busy_buffers_size 24k; # essentially, proxy_buffer_size + 2 small buffers of 4k
 				proxy_buffers         64 4k;
-				proxy_redirect        http://127.0.0.1:8000/ https://audytowanie.arqsz.net/;
+				proxy_redirect        http://ctfd_app https://audytowanie.arqsz.net/;
 			}
 
 		}
@@ -355,8 +355,6 @@ elif [ "$mode" = "cli" ]; then
 	source .venv-ctfd/bin/activate
 
 	export DATABASE_URL=${DATABASE_URL}
-	export DATABASE_URL=${DATABASE_URL:-"mysql+pymysql://$DATABASE_USER:$DATABASE_PASSWORD@$DATABASE_IP/$DATABASE_NAME"}
-
 	# Ensures that the database is available
 	python ping.py
 

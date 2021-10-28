@@ -1,7 +1,24 @@
 # Audytowanie
 Repozytorium na projekt z kursu Audytowanie na 2 semestrze studiów magisterskich CBE na PWr.
 
-## Pomoc
+## Lets Encrypt
+
+Z Cloudflare pobieramy klucz API global i swój mail. W polu SSL ustawiamy `FULL`.
+
+Zawartość `cloudflare.ini`
+```ini
+dns_cloudflare_api_key = APIKEY
+dns_cloudflare_email = EMAIL
+```
+
+```bash
+sudo apt install certbot python3-certbot-dns-cloudflare
+sudo certbot certonly   --dns-cloudflare --dns-cloudflare-credentials cloudflare.ini -d DOMENA
+```
+
+Wygenerowany certyfikat podmieniamy w pliku `ctfd-setup.sh` we fragmencie o nginxie.
+
+## Skrypt dla CTFd i nginxa
 
 ```bash
 Obowiązkowe argumenty:
