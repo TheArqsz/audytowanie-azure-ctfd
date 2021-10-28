@@ -249,13 +249,22 @@ if [ "${install_nginx}" = "1" ]; then
 			http2_max_field_size 128k;
 			http2_max_header_size 128k;
 
-			location / {
-				proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-				proxy_set_header X-Forwarded-Proto https;
-				proxy_set_header Host \$http_host;
-				proxy_redirect off;
-				proxy_buffering off;
-				proxy_pass http://ctfd_app;
+			location /{
+				proxy_set_header      Host $host;
+				proxy_set_header      X-Real-IP $remote_addr;
+				proxy_set_header      X-Forwaded-For $proxy_add_x_forwarded_for;
+				proxy_set_header      X-Forwarder-Proto $scheme;
+
+				# Rate limiting
+				limit_req zone=mylimit burst=20 nodelay;
+
+				proxy_pass    http://127.0.0.1:8000/;
+				proxy_read_timeout    3600;
+				proxy_buffering               off; # for a single server setup (SSL termination of Varnish), where no caching is done in nginx itself
+				proxy_buffer_size     24k; # should be enough for most PHP websites, or adjust as above
+				proxy_busy_buffers_size 24k; # essentially, proxy_buffer_size + 2 small buffers of 4k
+				proxy_buffers         64 4k;
+				proxy_redirect        http://127.0.0.1:8000/ https://audytowanie.arqsz.net/;
 			}
 
 		}
