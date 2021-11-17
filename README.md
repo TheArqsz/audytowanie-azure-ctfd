@@ -65,5 +65,10 @@ Aby uruchomić CTFd z poziomu konsoli z istniejącą bazą danych:
 ```bash
 ./ctfd-setup.sh -m cli --mock-database -u ctfd --database-url "mysql+pymysql://root:example@localhost/ctfd"
 ```
+lub
+```bash
+./ctfd-setup.sh -m cli --database-user USER --database-pwd 'PASSWORD' --database-ip IP --nginx
+```
+
 
 W przypadku zmockowanej bazy danych, stworzony zostanie kontener przechowujący dane w `/tmp/ctfd-mariadb-data`
